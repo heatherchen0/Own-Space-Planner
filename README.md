@@ -9,8 +9,6 @@ area of **33 m²** and an inferred rectangular shell of **420 × 750 cm**, or
 **31.5 m²**. The known area is descriptive; the inferred area is calculated
 from the editable shell dimensions.
 
-The starter template contains no address or resident information.
-
 ## Current features
 
 - A 2D grid with 10 cm, 50 cm, and 1 m intervals
@@ -126,9 +124,3 @@ npm run build
 - `src/planFile.ts` validates and serializes versioned plan files.
 - `src/storage.ts` persists complete plans and migrates older local data.
 - `e2e/planner.spec.ts` exercises the editor in a local browser.
-
-## Accuracy
-
-The default floor plan is a general starting point, not a survey or
-construction drawing. Verify critical dimensions and clearances independently
-before making purchasing, installation, plumbing, or built-in decisions.
