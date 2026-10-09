@@ -31,8 +31,7 @@ npm install
 npm run dev
 ```
 
-Open the local URL printed by Vite, normally
-`http://localhost:5173`.
+Open the local URL printed by Vite.
 
 To build and preview the production bundle locally:
 
