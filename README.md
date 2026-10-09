@@ -5,9 +5,7 @@ shapes inside an apartment outline. Geometry is stored in
 centimetres and rendered on a calibrated SVG grid.
 
 The included floor plan is a generic starter template. It has a known total
-area of **33 m²** and an inferred rectangular shell of **420 × 750 cm**, or
-**31.5 m²**. The known area is descriptive; the inferred area is calculated
-from the editable shell dimensions.
+area of **33 m²** and an inferred rectangular shell of **420 × 750 cm**.
 
 ## Current features
 
