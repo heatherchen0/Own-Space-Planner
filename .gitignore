@@ -8,3 +8,6 @@ dist/
 Thumbs.db
 playwright-report/
 test-results/
+
+# Personal plans and migration backups (never publish)
+.private/

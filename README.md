@@ -1,123 +1,152 @@
-# Own Space Planner
+﻿# Own Space Planner
 
-Own Space Planner is a small 2D tool for arranging accurately sized furniture
-shapes inside an apartment outline. Geometry is stored in
-centimetres and rendered on a calibrated SVG grid.
+Own Space Planner is a local-first 2D tool for arranging accurately sized
+furniture inside a floor plan. Coordinates and dimensions use centimetres,
+with a calibrated SVG grid.
 
-The included floor plan is a generic starter template. It has a known total
-area of **33 m²** and an inferred rectangular shell of **420 × 750 cm**.
-
-## Current features
-
-- A 2D grid with 10 cm, 50 cm, and 1 m intervals
-- An adjustable apartment width, length, and known total area
-- A live inferred-area calculation based on width × length
-- A generic starter layout with bathroom, entry, storage, kitchen, balcony,
-  and door-clearance landmarks
-- Furniture shapes that can be added, selected, dragged on a 5 cm snap grid,
-  renamed, resized, rotated in 90-degree steps, and deleted
-- Placement warnings for furniture that overlaps another item, a fixed area,
-  a door clearance, or the apartment boundary
-- Keyboard movement, browser-local autosaving, and a reset action
-- Export and import of the complete plan as a versioned JSON file
+The app initially starts with an empty **500 × 600 cm rectangle (30 m²)** and
+resumes your browser autosave on later visits. Choose a generic starter layout,
+keep the space empty, or import a private plan file. Personal layouts are not
+bundled with the app.
 
 ## Run locally
 
-Install [Node.js](https://nodejs.org/) 22.12 or newer, clone the repository,
-and run:
+Install [Node.js](https://nodejs.org/) 22.12 or newer, then run:
 
 ```sh
 npm install
 npm run dev
 ```
 
-Open the local URL printed by Vite.
+Open the local URL printed by Vite. On Windows PowerShell, use `npm.cmd`
+instead of `npm` if script execution is restricted.
 
-To build and preview the production bundle locally:
+To build and preview locally:
 
 ```sh
 npm run build
 npm run preview
 ```
 
-On Windows PowerShell, use `npm.cmd` in place of `npm` if script execution is
-restricted on the machine.
+No account, backend, or database is required.
 
-No account, server, or database is required. Anyone who clones the repository
-can run their own independent copy with Node.js and npm.
+## Choose a starter plan
 
-## Using apartment settings
+Use **Choose starter plan** to preview an empty space or five
+Helsinki-inspired apartment types:
 
-Edit the apartment width and length in centimetres to resize the outer shell.
-The planner recalculates the inferred area as:
+| Starter | Finnish notation | Example shell area |
+| --- | --- | ---: |
+| Empty space | — | 30 m² |
+| Open-kitchen studio | 1h+kt | 28 m² |
+| Separate-kitchen studio | 1h+k | 36 m² |
+| One-bedroom with open kitchen | 2h+kt | 45 m² |
+| One-bedroom with separate kitchen | 2h+k | 54 m² |
+| Two-bedroom family apartment | 3h+kt | 70 m² |
 
-```text
-width (cm) × length (cm) ÷ 10,000 = inferred area (m²)
-```
+These are original schematic drawings with illustrative dimensions. They
+represent apartment types found in Helsinki, rather than measured plans of
+specific homes. `h` counts living rooms and bedrooms, `k` means a separate
+kitchen, and `kt` means cooking space, shown open in these examples.
 
-The known total area is a separate editable value. It is not used to stretch
-the plan, because reported area and clear inner-shell area can follow different
-measurement conventions.
+The selection is informed by [Heka's apartment types](https://www.hekaoy.fi/kohde/kauppakartanonkatu-10/)
+and the [City of Helsinki's Koskelanpiha apartment types](https://asuntotuotanto.hel.fi/fi/asuntohaku/hitas/asunto-oy-helsingin-koskelanpiha-kunnalliskodintie-9).
+See also the [City's housing terminology](https://www.hel.fi/en/housing/housing-in-helsinki-tips-for-newcomers).
+These sources establish the categories; the sample dimensions and geometry
+are our own examples, not averages or copied apartment drawings.
 
-The default values are:
+Every starter begins without furniture. Walls, bathroom fixtures, kitchen cabinets,
+and door-clearance zones are fixed; arrange your own furniture around them.
+Choosing a starter asks for confirmation and preserves the current non-empty
+plan in the same recovery slot used by import and **New blank plan**.
 
-| Setting | Default |
-| --- | ---: |
-| Known total area | 33 m² |
-| Shell width | 420 cm |
-| Shell length | 750 cm |
-| Inferred shell area | 31.5 m² |
+## Import and save a personal plan
 
-Changing the shell dimensions preserves the centimetre-based model. Review
-furniture and fixed-feature placements after making the shell smaller.
+1. Choose **Import plan** and select your private JSON plan file.
+2. Arrange furniture. The app automatically saves the complete active plan
+   in this browser, including the imported floor layout.
+3. Choose **Export plan** to make a portable backup or move to another device.
 
-## Saving, exporting, and importing
+Files are read in the browser; the app does not upload them. Keep personal
+files outside the repository, build output, and any publicly served directory.
+The local `.private/` folder is ignored by Git and denied by the development
+server as an additional safeguard. An ignore rule alone does not protect a
+file that is imported into application code or copied into a deployment.
 
-The browser automatically saves the current apartment settings and furniture
-in `localStorage`. Browser storage is specific to the browser
-profile and site origin, so a plan saved on one computer is not automatically
-available on another computer or in a different browser.
+Browser autosave is specific to the browser profile and site origin (including
+the port). It is not encrypted storage or a cross-device backup. Clearing
+browser data can erase it; anyone using that browser profile can open it.
+Keep a separate private exported file.
 
-Use **Export plan** to download the complete plan as a versioned JSON file. Use
-**Import plan** to load a compatible plan file and replace the plan currently
-open in the editor. Plan files can move a layout between local installations
-or serve as a portable backup.
+**New blank plan** starts a fresh empty space. Before replacing a non-empty
+plan, the app keeps one complete recovery copy in browser storage. Choose
+**Restore previous plan** to reopen that copy. Importing another file or choosing
+a starter also keeps a recovery copy. This is one recovery slot, not a history
+of every plan; export files to retain multiple layouts. Replacement is blocked if the
+recovery copy cannot be saved.
 
-Exported plan files contain the apartment dimensions, furniture positions,
-dimensions, colors, and any labels entered by the user. Review those contents
-before sharing a file publicly. The application does not upload plans by
-itself.
+## Older saves and exports
+
+Version 2 plan files contain the floor drawing and placement zones as well as
+apartment settings and furniture. Version 1 files and old browser saves
+contain no full floor layout, so they cannot reconstruct it independently.
+
+To recover an older plan:
+
+1. Import a complete version 2 plan containing the correct floor layout.
+2. If this browser has an older save, choose **Restore older furniture**.
+   Alternatively, import your older exported file and confirm keeping the
+   currently open layout while restoring the old measurements and furniture.
+3. Export a new complete plan file for your backup.
+
+Old browser storage entries are retained. **Download older save** provides
+an unchanged backup of the older data. The app does not silently substitute
+an unrelated floor layout when restoring an old save.
+
+## Editing
+
+- Resize the outer rectangle using apartment width and length in centimetres.
+- Set the known area independently; inferred area is width × length ÷ 10,000.
+- Add, rename, resize, rotate, move, and delete furniture.
+- Drag on a 5 cm snap grid, or use arrow keys (Shift for larger steps).
+- Placement warnings identify overlaps with furniture, imported blocked zones,
+  or the outer boundary.
+
+Fixed structures retain their saved centimetre coordinates when the
+outer rectangle is resized. The current editor changes the shell and furniture;
+editing walls or fixtures directly is not yet supported. All imported drawing
+shapes, labels, and blocked zones are retained in subsequent exports.
+
+## Privacy when publishing
+
+Publish only the generic app and synthetic examples. Do not add personal files
+to `src/`, `public/`, screenshots, documentation, tests, or deployment archives.
+A hidden button, secret URL, or frontend password cannot protect layout data
+that is shipped in the public JavaScript bundle.
+
+Removing a layout from the current source does not remove it from older Git
+commits, releases, deployments, forks, or downloaded copies. Review those
+separately before publishing; history cleanup is not performed by this app.
 
 ## Verification
 
-Run the unit tests:
-
 ```sh
 npm run test
-```
-
-Run the browser interaction suite with Microsoft Edge installed:
-
-```sh
+npm run build
 npm run test:e2e
 ```
 
-Run the production build check:
-
-```sh
-npm run build
-```
+The browser suite uses Microsoft Edge. Its layout fixtures are synthetic and
+independent of any personal plan.
 
 ## Project map
 
-- `src/apartment.ts` defines the generic starter settings, plan geometry, and
-  starter furniture.
-- `src/types.ts` defines the apartment, furniture, and versioned plan-file
-  data structures.
-- `src/geometry.ts` contains snapping, rotation, bounds, and clamping helpers.
-- `src/PlannerCanvas.tsx` renders the grid, plan landmarks, dimensions, and
-  pointer interactions.
-- `src/App.tsx` owns the plan state and editing controls.
-- `src/planFile.ts` validates and serializes versioned plan files.
-- `src/storage.ts` persists complete plans and migrates older local data.
-- `e2e/planner.spec.ts` exercises the editor in a local browser.
+- `src/apartment.ts`: generic defaults, bounds, and drawing extents.
+- `src/starterPlans.ts`: original schematic starter layouts and metadata.
+- `src/StarterPlanPicker.tsx`: accessible starter previews and selection.
+- `src/types.ts`: complete plan and drawing data structures.
+- `src/PlannerCanvas.tsx`: grid, imported drawing primitives, and furniture.
+- `src/App.tsx`: editing, importing/exporting plans, and recovery controls.
+- `src/planFile.ts`: strict versioned file validation and serialization.
+- `src/storage.ts`: browser autosave, recovery copy, and older-save access.
+- `e2e/planner.spec.ts`: browser interaction and persistence checks.

@@ -143,6 +143,59 @@ function FurnitureShape({
   );
 }
 
+function LayoutShape({ shape }: { shape: PlanGeometry["shapes"][number] }) {
+  const className = "layout-" + shape.style;
+
+  switch (shape.type) {
+    case "rect":
+      return (
+        <rect
+          className={className}
+          x={shape.x}
+          y={shape.y}
+          width={shape.width}
+          height={shape.height}
+        />
+      );
+    case "line":
+      return (
+        <line
+          className={className}
+          x1={shape.x1}
+          y1={shape.y1}
+          x2={shape.x2}
+          y2={shape.y2}
+        />
+      );
+    case "ellipse":
+      return (
+        <ellipse
+          className={className}
+          cx={shape.cx}
+          cy={shape.cy}
+          rx={shape.rx}
+          ry={shape.ry}
+        />
+      );
+    case "path":
+      return <path className={className} d={shape.d} />;
+    case "text":
+      return (
+        <text
+          className={className}
+          x={shape.x}
+          y={shape.y}
+          textAnchor="middle"
+          transform={
+            "rotate(" + shape.rotate + " " + shape.x + " " + shape.y + ")"
+          }
+        >
+          {shape.text}
+        </text>
+      );
+  }
+}
+
 export function PlannerCanvas({
   geometry,
   items,
@@ -215,38 +268,23 @@ export function PlannerCanvas({
     setDraggingId(null);
   }
 
-  const {
-    bounds,
-    bathroom,
-    entry,
-    defaultNook,
-    referencePartition,
-    entryStorage,
-    kitchenRun,
-    entryDoorClearance,
-    balconyDoorClearance,
-    balcony,
-  } = geometry;
-  const rightDimensionX = bounds.width + 27;
-  const rightDimensionLabelX = bounds.width + 38;
-  const rightDimensionMidY = bounds.height / 2;
-  const scaleY = bounds.height + 135;
-  const mainRoomX = Math.max(180, bounds.width - 165);
-  const mainRoomY = bounds.height * 0.73;
+  const { bounds, drawingBounds, shapes } = geometry;
+  const rightDimensionX = drawingBounds.x + drawingBounds.width + 27;
+  const rightDimensionLabelX = rightDimensionX + 11;
+  const rightDimensionMidY = bounds.y + bounds.height / 2;
+  const topDimensionY = drawingBounds.y - 24;
+  const scaleY = drawingBounds.y + drawingBounds.height + 45;
+  const viewX = drawingBounds.x - 75;
+  const viewY = drawingBounds.y - 75;
+  const viewWidth = Math.max(100, drawingBounds.width) + 150;
+  const viewHeight = drawingBounds.height + 175;
 
   return (
     <svg
       ref={svgRef}
-      className={
-        "planner-canvas" + (draggingId ? " is-dragging" : "")
-      }
+      className={"planner-canvas" + (draggingId ? " is-dragging" : "")}
       data-testid="planner-canvas"
-      viewBox={
-        "-75 -75 " +
-        (bounds.width + 150) +
-        " " +
-        (bounds.height + 265)
-      }
+      viewBox={viewX + " " + viewY + " " + viewWidth + " " + viewHeight}
       preserveAspectRatio="xMidYMid meet"
       onPointerDown={() => onSelect(null)}
       onPointerMove={continueDrag}
@@ -283,7 +321,7 @@ export function PlannerCanvas({
           <path d="M 100 0 L 0 0 0 100" className="grid-line grid-major" />
         </pattern>
         <pattern
-          id="reference-hatch"
+          id="layout-hatch"
           width="12"
           height="12"
           patternUnits="userSpaceOnUse"
@@ -295,53 +333,63 @@ export function PlannerCanvas({
 
       <rect
         className="grid-background"
-        x="-75"
-        y="-75"
-        width={bounds.width + 150}
-        height={bounds.height + 265}
+        x={viewX}
+        y={viewY}
+        width={viewWidth}
+        height={viewHeight}
         fill="url(#grid-100)"
       />
 
       <g className="plan-dimensions" aria-label="Apartment dimensions">
-        <line x1="0" y1="-24" x2={bounds.width} y2="-24" />
-        <line x1="0" y1="-31" x2="0" y2="-17" />
         <line
-          x1={bounds.width}
-          y1="-31"
-          x2={bounds.width}
-          y2="-17"
+          x1={bounds.x}
+          y1={topDimensionY}
+          x2={bounds.x + bounds.width}
+          y2={topDimensionY}
         />
-        <text x={bounds.width / 2} y="-32" textAnchor="middle">
+        <line
+          x1={bounds.x}
+          y1={topDimensionY - 7}
+          x2={bounds.x}
+          y2={topDimensionY + 7}
+        />
+        <line
+          x1={bounds.x + bounds.width}
+          y1={topDimensionY - 7}
+          x2={bounds.x + bounds.width}
+          y2={topDimensionY + 7}
+        />
+        <text
+          x={bounds.x + bounds.width / 2}
+          y={topDimensionY - 8}
+          textAnchor="middle"
+        >
           {bounds.width + " cm"}
         </text>
         <line
           x1={rightDimensionX}
-          y1="0"
+          y1={bounds.y}
           x2={rightDimensionX}
-          y2={bounds.height}
+          y2={bounds.y + bounds.height}
         />
         <line
           x1={rightDimensionX - 7}
-          y1="0"
+          y1={bounds.y}
           x2={rightDimensionX + 7}
-          y2="0"
+          y2={bounds.y}
         />
         <line
           x1={rightDimensionX - 7}
-          y1={bounds.height}
+          y1={bounds.y + bounds.height}
           x2={rightDimensionX + 7}
-          y2={bounds.height}
+          y2={bounds.y + bounds.height}
         />
         <text
           x={rightDimensionLabelX}
           y={rightDimensionMidY}
           textAnchor="middle"
           transform={
-            "rotate(90 " +
-            rightDimensionLabelX +
-            " " +
-            rightDimensionMidY +
-            ")"
+            "rotate(90 " + rightDimensionLabelX + " " + rightDimensionMidY + ")"
           }
         >
           {bounds.height + " cm"}
@@ -350,320 +398,25 @@ export function PlannerCanvas({
 
       <g className="apartment-shell">
         <rect
-          x="0"
-          y="0"
+          x={bounds.x}
+          y={bounds.y}
           width={bounds.width}
           height={bounds.height}
           className="room-fill"
         />
         <rect
-          x="0"
-          y="0"
+          x={bounds.x}
+          y={bounds.y}
           width={bounds.width}
           height={bounds.height}
           className="outer-wall"
         />
       </g>
 
-      <g className="balcony-landmark">
-        <rect
-          x={balcony.x}
-          y={balcony.y}
-          width={balcony.width}
-          height={balcony.depth}
-        />
-        <line
-          x1={balcony.x}
-          y1={balcony.y + 30}
-          x2={balcony.x + balcony.width}
-          y2={balcony.y + 30}
-        />
-        <line
-          x1={balcony.x}
-          y1={balcony.y + 60}
-          x2={balcony.x + balcony.width}
-          y2={balcony.y + 60}
-        />
-        <text
-          x={balcony.x + balcony.width / 2}
-          y={balcony.y + 52}
-          textAnchor="middle"
-        >
-          BALCONY
-        </text>
-      </g>
-
-      <g className="fixed-landmark bathroom-landmark">
-        <rect
-          x="5"
-          y="5"
-          width={bathroom.width - 10}
-          height={bathroom.depth - 10}
-        />
-        <line
-          className="interior-wall"
-          x1={bathroom.x + bathroom.width}
-          y1="0"
-          x2={bathroom.x + bathroom.width}
-          y2={bathroom.y + bathroom.depth}
-        />
-        <line
-          className="interior-wall"
-          x1="0"
-          y1={bathroom.y + bathroom.depth}
-          x2={bathroom.x + bathroom.width}
-          y2={bathroom.y + bathroom.depth}
-        />
-        <rect className="fixture" x="22" y="25" width="62" height="62" />
-        <path className="fixture" d="M 31 28 L 76 83 M 76 28 L 31 83" />
-        <ellipse className="fixture" cx="63" cy="156" rx="22" ry="33" />
-        <text x="121" y="113" textAnchor="middle">
-          BATHROOM
-        </text>
-      </g>
-
-      <g className="fixed-landmark entry-landmark">
-        <rect
-          x={entry.x}
-          y={entry.y}
-          width={entry.width}
-          height={entry.depth}
-        />
-        <text
-          x={entry.x + entry.width / 2}
-          y={entry.y + 84}
-          textAnchor="middle"
-        >
-          ENTRY
-        </text>
-        <path
-          className="door-swing"
-          d={
-            "M " +
-            entryDoorClearance.x +
-            " 0 L " +
-            entryDoorClearance.x +
-            " " +
-            entryDoorClearance.height +
-            " A " +
-            entryDoorClearance.width +
-            " " +
-            entryDoorClearance.height +
-            " 0 0 0 " +
-            (entryDoorClearance.x + entryDoorClearance.width) +
-            " 0"
-          }
-        />
-      </g>
-
-      <g className="fixed-landmark storage-landmark">
-        <rect
-          x={entryStorage.x}
-          y={entryStorage.y}
-          width={entryStorage.width}
-          height={entryStorage.depth}
-        />
-        <line
-          x1={entryStorage.x}
-          y1="55"
-          x2={entryStorage.x + entryStorage.width}
-          y2="55"
-        />
-        <line
-          x1={entryStorage.x}
-          y1="108"
-          x2={entryStorage.x + entryStorage.width}
-          y2="108"
-        />
-        <text
-          className="vertical-label"
-          x={entryStorage.x + 39}
-          y="82"
-          textAnchor="middle"
-          transform={
-            "rotate(90 " + (entryStorage.x + 39) + " 82)"
-          }
-        >
-          STORAGE
-        </text>
-      </g>
-
-      <g className="fixed-landmark kitchen-landmark">
-        <rect
-          x={kitchenRun.x}
-          y={kitchenRun.y}
-          width={kitchenRun.width}
-          height={kitchenRun.depth}
-        />
-        <rect
-          className="fixture"
-          x={kitchenRun.x + 11}
-          y={kitchenRun.y + 33}
-          width="38"
-          height="54"
-          rx="5"
-        />
-        <circle
-          className="fixture"
-          cx={kitchenRun.x + 20}
-          cy={kitchenRun.y + 155}
-          r="10"
-        />
-        <circle
-          className="fixture"
-          cx={kitchenRun.x + 42}
-          cy={kitchenRun.y + 155}
-          r="10"
-        />
-        <circle
-          className="fixture"
-          cx={kitchenRun.x + 20}
-          cy={kitchenRun.y + 180}
-          r="10"
-        />
-        <circle
-          className="fixture"
-          cx={kitchenRun.x + 42}
-          cy={kitchenRun.y + 180}
-          r="10"
-        />
-        <text
-          x={kitchenRun.x + 30}
-          y={kitchenRun.y + 250}
-          textAnchor="middle"
-          transform={
-            "rotate(90 " +
-            (kitchenRun.x + 30) +
-            " " +
-            (kitchenRun.y + 250) +
-            ")"
-          }
-        >
-          KITCHEN
-        </text>
-      </g>
-
-      <g className="reference-partition">
-        <rect
-          x={referencePartition.x}
-          y={referencePartition.y}
-          width={referencePartition.width}
-          height={referencePartition.depth}
-          fill="url(#reference-hatch)"
-        />
-        <text
-          x={referencePartition.x + 27}
-          y={referencePartition.y + 79}
-          textAnchor="middle"
-          transform={
-            "rotate(90 " +
-            (referencePartition.x + 27) +
-            " " +
-            (referencePartition.y + 79) +
-            ")"
-          }
-        >
-          REFERENCE
-        </text>
-      </g>
-
-      <g className="default-dimension" aria-label="Default nook width">
-        <line
-          x1={defaultNook.x}
-          y1={defaultNook.y + 38}
-          x2={defaultNook.x + defaultNook.width}
-          y2={defaultNook.y + 38}
-        />
-        <line
-          x1={defaultNook.x}
-          y1={defaultNook.y + 29}
-          x2={defaultNook.x}
-          y2={defaultNook.y + 47}
-        />
-        <line
-          x1={defaultNook.x + defaultNook.width}
-          y1={defaultNook.y + 29}
-          x2={defaultNook.x + defaultNook.width}
-          y2={defaultNook.y + 47}
-        />
-        <rect
-          x="16"
-          y={defaultNook.y + 25}
-          width="133"
-          height="26"
-          rx="5"
-        />
-        <text x="82.5" y={defaultNook.y + 43} textAnchor="middle">
-          165 cm · default
-        </text>
-        <text
-          className="nook-label"
-          x="82.5"
-          y={defaultNook.y + 68}
-          textAnchor="middle"
-        >
-          OPEN NOOK
-        </text>
-      </g>
-
-      <text
-        className="main-room-label"
-        x={mainRoomX}
-        y={mainRoomY}
-        textAnchor="middle"
-      >
-        MAIN ROOM
-      </text>
-
-      <g className="balcony-door">
-        <line
-          x1={balconyDoorClearance.x}
-          y1={bounds.height}
-          x2={balconyDoorClearance.x + balconyDoorClearance.width}
-          y2={bounds.height}
-        />
-        <path
-          d={
-            "M " +
-            balconyDoorClearance.x +
-            " " +
-            bounds.height +
-            " L " +
-            balconyDoorClearance.x +
-            " " +
-            balconyDoorClearance.y +
-            " A " +
-            balconyDoorClearance.height +
-            " " +
-            balconyDoorClearance.height +
-            " 0 0 1 " +
-            (balconyDoorClearance.x + balconyDoorClearance.height) +
-            " " +
-            bounds.height
-          }
-        />
-        <path
-          d={
-            "M " +
-            (balconyDoorClearance.x + balconyDoorClearance.width) +
-            " " +
-            bounds.height +
-            " L " +
-            (balconyDoorClearance.x + balconyDoorClearance.width) +
-            " " +
-            balconyDoorClearance.y +
-            " A " +
-            balconyDoorClearance.height +
-            " " +
-            balconyDoorClearance.height +
-            " 0 0 0 " +
-            (balconyDoorClearance.x +
-              balconyDoorClearance.width -
-              balconyDoorClearance.height) +
-            " " +
-            bounds.height
-          }
-        />
+      <g className="layout-layer" aria-label="Imported floor plan features">
+        {shapes.map((shape, index) => (
+          <LayoutShape key={index} shape={shape} />
+        ))}
       </g>
 
       <g className="furniture-layer">
@@ -681,7 +434,10 @@ export function PlannerCanvas({
         ))}
       </g>
 
-      <g className="scale-bar" transform={"translate(0 " + scaleY + ")"}>
+      <g
+        className="scale-bar"
+        transform={"translate(" + drawingBounds.x + " " + scaleY + ")"}
+      >
         <text x="0" y="-14">
           Scale
         </text>

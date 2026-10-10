@@ -24,19 +24,28 @@ import {
 } from "./geometry";
 import {
   MAX_PLAN_FURNITURE,
+  MAX_PLAN_FILE_BYTES,
+  parseLegacyPlanFile,
   parsePlanFile,
   serializePlan,
 } from "./planFile";
 import { PlannerCanvas } from "./PlannerCanvas";
-import { clearSavedPlan, loadPlan, savePlan } from "./storage";
+import { StarterPlanPicker } from "./StarterPlanPicker";
+import { createStarterPlan, STARTER_PLANS } from "./starterPlans";
+import {
+  loadLegacyPlan,
+  loadPlan,
+  loadPreviousPlan,
+  loadUnreadablePlan,
+  savePlan,
+  savePreviousPlan,
+} from "./storage";
 import type {
   ApartmentSettings,
   FurnitureItem,
   PlannerPlan,
   Point,
 } from "./types";
-
-const MAX_IMPORT_BYTES = 1024 * 1024;
 
 type SaveStatus = "saving" | "saved" | "error";
 type PlanNotice = { kind: "success" | "error"; text: string };
@@ -55,6 +64,7 @@ function isInteractiveControl(target: EventTarget | null) {
 function clampPlanFurniture(plan: PlannerPlan): PlannerPlan {
   const bounds = getApartmentBounds(plan.apartment);
   return {
+    ...plan,
     apartment: { ...plan.apartment },
     furniture: plan.furniture.map((item) => ({
       ...item,
@@ -187,14 +197,16 @@ function NumberField({
 }
 
 export default function App() {
-  const [plan, setPlan] = useState<PlannerPlan>(() =>
-    clampPlanFurniture(loadPlan() ?? createDefaultPlan()),
-  );
+  const [plan, setPlan] = useState<PlannerPlan>(() => loadPlan() ?? createDefaultPlan());
   const [selectedId, setSelectedId] = useState<string | null>(
     () => plan.furniture[0]?.id ?? null,
   );
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("saving");
   const [planNotice, setPlanNotice] = useState<PlanNotice | null>(null);
+  const [previousPlan, setPreviousPlan] = useState(loadPreviousPlan);
+  const [legacyPlan] = useState(loadLegacyPlan);
+  const [unreadableSave, setUnreadableSave] = useState(loadUnreadablePlan);
+  const [starterPickerOpen, setStarterPickerOpen] = useState(false);
   const [dirtyDraftIds, setDirtyDraftIds] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
@@ -203,8 +215,8 @@ export default function App() {
 
   const items = plan.furniture;
   const geometry = useMemo(
-    () => buildPlanGeometry(plan.apartment),
-    [plan.apartment],
+    () => buildPlanGeometry(plan.apartment, plan.layout),
+    [plan.apartment, plan.layout],
   );
   const inferredAreaSqm = getInferredAreaSqm(plan.apartment);
   const hasDirtyDraft = dirtyDraftIds.size > 0;
@@ -266,6 +278,7 @@ export default function App() {
   useEffect(() => {
     setSaveStatus("saving");
     setSaveStatus(savePlan(plan) ? "saved" : "error");
+    setUnreadableSave(loadUnreadablePlan());
   }, [plan]);
 
   useEffect(() => {
@@ -305,6 +318,10 @@ export default function App() {
           }
 
           const updated = { ...item, ...patch };
+          const changesGeometry = ["x", "y", "width", "depth", "rotation"].some(
+            (key) => Object.prototype.hasOwnProperty.call(patch, key),
+          );
+          if (!changesGeometry) return updated;
           return {
             ...updated,
             ...clampFurnitureCenter(updated, updated, bounds),
@@ -321,6 +338,7 @@ export default function App() {
   function updateApartment(patch: Partial<ApartmentSettings>) {
     setPlan((current) =>
       clampPlanFurniture({
+        ...current,
         apartment: { ...current.apartment, ...patch },
         furniture: current.furniture,
       }),
@@ -368,34 +386,92 @@ export default function App() {
     setSelectedId(null);
   }
 
+  function keepRecoveryCopy(): boolean {
+    const blank = createDefaultPlan();
+    const hasContent =
+      plan.furniture.length > 0 ||
+      plan.layout.shapes.length > 0 ||
+      plan.layout.blockedZones.length > 0 ||
+      plan.layout.extent !== null ||
+      plan.apartment.widthCm !== blank.apartment.widthCm ||
+      plan.apartment.lengthCm !== blank.apartment.lengthCm ||
+      plan.apartment.knownAreaSqm !== blank.apartment.knownAreaSqm;
+    if (!hasContent) return true;
+    if (!savePreviousPlan(plan)) {
+      setPlanNotice({
+        kind: "error",
+        text: "Could not keep a recovery copy. Export your current plan and free browser storage before replacing it.",
+      });
+      return false;
+    }
+    setPreviousPlan(plan);
+    return true;
+  }
+
+  function openPlan(nextPlan: PlannerPlan) {
+    sequenceRef.current = nextPlan.furniture.length;
+    setPlan(nextPlan);
+    setSelectedId(nextPlan.furniture[0]?.id ?? null);
+  }
+
   function resetPlan() {
     const shouldReset = window.confirm(
-      "Reset the apartment settings and furniture to the starter plan?",
+      "Start a new blank plan? A recovery copy of the current plan will be kept in this browser. Export a file for a separate backup.",
     );
     if (!shouldReset) {
       return;
     }
 
-    clearSavedPlan();
-    const defaultPlan = createDefaultPlan();
-    sequenceRef.current = defaultPlan.furniture.length;
-    setPlan(defaultPlan);
-    setSelectedId(defaultPlan.furniture[0]?.id ?? null);
-    setPlanNotice({ kind: "success", text: "Starter plan restored." });
+    if (!keepRecoveryCopy()) return;
+    openPlan(createDefaultPlan());
+    setPlanNotice({ kind: "success", text: "New blank plan opened." });
+  }
+
+  function restorePreviousPlan() {
+    if (!previousPlan || !window.confirm("Restore the previous plan? A recovery copy of your current plan will be kept.")) return;
+    const restored = previousPlan;
+    if (!keepRecoveryCopy()) return;
+    openPlan(restored);
+    setPlanNotice({ kind: "success", text: "Previous plan restored." });
+  }
+
+  function chooseStarterPlan(id: string) {
+    const definition = STARTER_PLANS.find((starter) => starter.id === id);
+    if (!definition) return;
+    if (!window.confirm(`Replace the current plan with ${definition.name}? A recovery copy will be kept in this browser.`)) return;
+    if (!keepRecoveryCopy()) {
+      setStarterPickerOpen(false);
+      return;
+    }
+    openPlan(createStarterPlan(id));
+    setStarterPickerOpen(false);
+    setPlanNotice({ kind: "success", text: `${definition.name} starter loaded.` });
+  }
+
+  function restoreOlderFurniture() {
+    if (!legacyPlan || !window.confirm("Keep the open floor layout and restore the older saved measurements and furniture?")) return;
+    if (!keepRecoveryCopy()) return;
+    openPlan({
+      ...plan,
+      apartment: legacyPlan.plan.apartment ?? plan.apartment,
+      furniture: legacyPlan.plan.furniture,
+    });
+    setPlanNotice({ kind: "success", text: "Older furniture restored onto the open floor layout. The older save is still available." });
+  }
+
+  function downloadSource(source: string, filename: string) {
+    const blob = new Blob([source], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = filename;
+    anchor.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 0);
   }
 
   function exportPlan() {
     try {
-      const blob = new Blob([serializePlan(plan)], {
-        type: "application/json",
-      });
-      const url = URL.createObjectURL(blob);
-      const anchor = document.createElement("a");
-      anchor.href = url;
-      anchor.download =
-        "own-space-plan-" + new Date().toISOString().slice(0, 10) + ".json";
-      anchor.click();
-      window.setTimeout(() => URL.revokeObjectURL(url), 0);
+      downloadSource(serializePlan(plan), "own-space-plan-" + new Date().toISOString().slice(0, 10) + ".json");
       setPlanNotice({
         kind: "success",
         text: "Plan exported as a JSON file.",
@@ -416,7 +492,7 @@ export default function App() {
       return;
     }
 
-    if (file.size > MAX_IMPORT_BYTES) {
+    if (file.size > MAX_PLAN_FILE_BYTES) {
       setPlanNotice({
         kind: "error",
         text: "That file is too large. Plan files must be 1 MB or smaller.",
@@ -425,8 +501,21 @@ export default function App() {
     }
 
     try {
-      const result = parsePlanFile(await file.text());
+      const source = await file.text();
+      const result = parsePlanFile(source);
       if (!result.ok) {
+        const legacy = parseLegacyPlanFile(source);
+        if (legacy.ok && (plan.layout.shapes.length > 0 || plan.layout.blockedZones.length > 0)) {
+          if (!window.confirm("This older file has no floor layout. Keep the open layout and replace its measurements and furniture?")) return;
+          if (!keepRecoveryCopy()) return;
+          openPlan({
+            ...plan,
+            apartment: legacy.plan.apartment ?? plan.apartment,
+            furniture: legacy.plan.furniture,
+          });
+          setPlanNotice({ kind: "success", text: "Older furniture imported onto the open floor layout." });
+          return;
+        }
         setPlanNotice({ kind: "error", text: result.error });
         return;
       }
@@ -435,10 +524,8 @@ export default function App() {
         return;
       }
 
-      const importedPlan = clampPlanFurniture(result.plan);
-      sequenceRef.current = importedPlan.furniture.length;
-      setPlan(importedPlan);
-      setSelectedId(importedPlan.furniture[0]?.id ?? null);
+      if (!keepRecoveryCopy()) return;
+      openPlan(result.plan);
       setPlanNotice({ kind: "success", text: "Plan imported." });
     } catch {
       setPlanNotice({
@@ -452,7 +539,7 @@ export default function App() {
     <div className="app-shell">
       <header className="app-header">
         <div>
-          <div className="draft-badge">WORKING DRAFT · v0.2</div>
+          <div className="draft-badge">WORKING DRAFT · v0.3</div>
           <h1>Own Space Planner</h1>
           <p>A local-first 2D planner. Geometry is stored in centimetres.</p>
         </div>
@@ -477,7 +564,7 @@ export default function App() {
         <section className="canvas-panel" aria-labelledby="plan-heading">
           <div className="canvas-toolbar">
             <div>
-              <h2 id="plan-heading">Default floor plan</h2>
+              <h2 id="plan-heading">Floor plan</h2>
               <p>Drag furniture. Movement snaps to 5 cm.</p>
             </div>
             <div className="toolbar-actions">
@@ -507,7 +594,9 @@ export default function App() {
                 aria-hidden="true"
                 onChange={importPlan}
               />
-              <button onClick={resetPlan}>Reset starter plan</button>
+              <button onClick={resetPlan}>New blank plan</button>
+              <button onClick={() => setStarterPickerOpen(true)}>Choose starter plan</button>
+              {previousPlan && <button onClick={restorePreviousPlan}>Restore previous plan</button>}
             </div>
           </div>
           {planNotice && (
@@ -516,6 +605,19 @@ export default function App() {
               role={planNotice.kind === "error" ? "alert" : "status"}
             >
               {planNotice.text}
+            </div>
+          )}
+          {legacyPlan && (
+            <div className="plan-notice">
+              <p>An older save is available in this browser. Import a complete floor plan first, then restore its older furniture and measurements.</p>
+              <button onClick={restoreOlderFurniture} disabled={plan.layout.shapes.length === 0 && plan.layout.blockedZones.length === 0}>Restore older furniture</button>{" "}
+              <button onClick={() => downloadSource(legacyPlan.source, "own-space-older-save.json")}>Download older save</button>
+            </div>
+          )}
+          {unreadableSave && (
+            <div className="plan-notice">
+              <p>A saved plan could not be opened. Its original data has been preserved. Download a backup before clearing browser storage.</p>
+              <button onClick={() => downloadSource(unreadableSave, "own-space-unreadable-save.json")}>Download unreadable save</button>
             </div>
           )}
           <div className="canvas-frame">
@@ -531,11 +633,11 @@ export default function App() {
           <div className="canvas-legend" aria-label="Drawing legend">
             <span>
               <i className="legend-swatch default-swatch" />
-              Default dimension
+              Dimension
             </span>
             <span>
               <i className="legend-swatch template-swatch" />
-              Template structure
+              Fixed structure
             </span>
             <span>
               <i className="legend-swatch conflict-swatch" />
@@ -593,6 +695,11 @@ export default function App() {
                 <strong>{formatArea(inferredAreaSqm)} m²</strong>
               </span>
             </div>
+            {plan.layout.shapes.length > 0 && (
+              <p className="structure-note">
+                Fixed structures keep their centimetre positions when you resize the outer space.
+              </p>
+            )}
           </section>
 
           <section className="panel-section editor-section">
@@ -673,12 +780,17 @@ export default function App() {
               </div>
             ) : (
               <div className="empty-selection">
-                Select a furniture shape on the plan, or add a new one.
+                {items.length === 0 && plan.layout.shapes.length === 0
+                  ? "Add furniture to this empty space, import a plan, or choose a starter plan."
+                  : "Select a furniture shape on the plan, or add a new one."}
               </div>
             )}
           </section>
         </aside>
       </main>
+      {starterPickerOpen && (
+        <StarterPlanPicker onChoose={chooseStarterPlan} onClose={() => setStarterPickerOpen(false)} />
+      )}
     </div>
   );
 }

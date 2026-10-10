@@ -1,72 +1,73 @@
-import { createDefaultPlan } from "./apartment";
-import {
-  isFurnitureItem,
-  parsePlanFile,
-  serializePlan,
-  validateFurnitureList,
-} from "./planFile";
-import type { FurnitureItem, PlannerPlan } from "./types";
+﻿import { parseLegacyPlanFile, parsePlanFile, serializePlan } from "./planFile";
+import type { LegacyPlan, PlannerPlan } from "./types";
 
-const STORAGE_KEY = "own-space-planner:v2:plan";
+const STORAGE_KEY = "own-space-planner:v3:plan";
+const PREVIOUS_STORAGE_KEY = "own-space-planner:v2:plan";
 const LEGACY_STORAGE_KEY = "own-space-planner:v1:furniture";
+const PREVIOUS_PLAN_KEY = "own-space-planner:v3:previous-plan";
+const UNREADABLE_PLAN_KEY = "own-space-planner:v3:unreadable-plan";
 
-// Kept as a re-export for callers that validated v1 furniture through storage.
-export { isFurnitureItem };
+export { isFurnitureItem } from "./planFile";
 
-function parseLegacyFurniture(source: string): FurnitureItem[] | null {
+function readStoredValue(key: string): string | null {
   try {
-    const parsed: unknown = JSON.parse(source);
-    return validateFurnitureList(parsed) === null
-      ? (parsed as FurnitureItem[])
-      : null;
+    return window.localStorage.getItem(key);
   } catch {
     return null;
   }
 }
 
 export function loadPlan(): PlannerPlan | null {
-  try {
-    const current = window.localStorage.getItem(STORAGE_KEY);
-    if (current) {
-      const result = parsePlanFile(current);
-      if (result.ok) {
-        return result.plan;
-      }
-    }
-
-    const legacy = window.localStorage.getItem(LEGACY_STORAGE_KEY);
-    if (!legacy) {
-      return null;
-    }
-
-    const furniture = parseLegacyFurniture(legacy);
-    if (!furniture) {
-      return null;
-    }
-
-    const migrated: PlannerPlan = {
-      ...createDefaultPlan(),
-      furniture,
-    };
-
-    // Keep the v1 value if writing v2 fails so the migration can be retried.
-    if (savePlan(migrated)) {
-      try {
-        window.localStorage.removeItem(LEGACY_STORAGE_KEY);
-      } catch {
-        // The valid v2 value is already durable; a stale v1 value is harmless.
-      }
-    }
-
-    return migrated;
-  } catch {
-    return null;
+  for (const key of [STORAGE_KEY, PREVIOUS_STORAGE_KEY]) {
+    const source = readStoredValue(key);
+    if (!source) continue;
+    const result = parsePlanFile(source);
+    if (result.ok) return result.plan;
   }
+  return null;
+}
+
+export function loadLegacyPlan(): { source: string; plan: LegacyPlan } | null {
+  for (const key of [PREVIOUS_STORAGE_KEY, LEGACY_STORAGE_KEY]) {
+    const source = readStoredValue(key);
+    if (!source) continue;
+    const result = parseLegacyPlanFile(source);
+    if (result.ok) return { source, plan: result.plan };
+  }
+  return null;
 }
 
 export function savePlan(plan: PlannerPlan): boolean {
   try {
-    window.localStorage.setItem(STORAGE_KEY, serializePlan(plan));
+    const source = serializePlan(plan);
+    const current = window.localStorage.getItem(STORAGE_KEY);
+    if (current !== null && !parsePlanFile(current).ok) {
+      // Preserve the exact source for recovery before replacing unreadable data.
+      const preserved = window.localStorage.getItem(UNREADABLE_PLAN_KEY);
+      if (preserved !== null && preserved !== current) return false;
+      if (preserved === null) window.localStorage.setItem(UNREADABLE_PLAN_KEY, current);
+    }
+    window.localStorage.setItem(STORAGE_KEY, source);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function loadUnreadablePlan(): string | null {
+  return readStoredValue(UNREADABLE_PLAN_KEY);
+}
+
+export function loadPreviousPlan(): PlannerPlan | null {
+  const source = readStoredValue(PREVIOUS_PLAN_KEY);
+  if (!source) return null;
+  const result = parsePlanFile(source);
+  return result.ok ? result.plan : null;
+}
+
+export function savePreviousPlan(plan: PlannerPlan): boolean {
+  try {
+    window.localStorage.setItem(PREVIOUS_PLAN_KEY, serializePlan(plan));
     return true;
   } catch {
     return false;
@@ -74,19 +75,11 @@ export function savePlan(plan: PlannerPlan): boolean {
 }
 
 export function clearSavedPlan(): boolean {
-  let cleared = true;
-
   try {
+    // Older keys remain available for explicit recovery and backup.
     window.localStorage.removeItem(STORAGE_KEY);
+    return true;
   } catch {
-    cleared = false;
+    return false;
   }
-
-  try {
-    window.localStorage.removeItem(LEGACY_STORAGE_KEY);
-  } catch {
-    cleared = false;
-  }
-
-  return cleared;
 }
